@@ -1,4 +1,10 @@
 package io.github.trysac.android_offline_notes
 
-/** The input is empty or holds only whitespace; the message is `input is blank`. */
-public class BlankInputException : IllegalArgumentException("input is blank")
+/**
+ * Thrown when a required text input is blank.
+ */
+public class BlankInputException :
+    NotesException(
+        code = "blank_input",
+        message = "input is blank",
+    )

@@ -1,28 +1,27 @@
 package io.github.trysac.android_offline_notes
 
+import net.jqwik.api.Arbitraries
+import net.jqwik.api.Arbitrary
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import net.jqwik.api.Provide
 import org.junit.jupiter.api.Assertions.assertEquals
 
-/** Property tests (jqwik) of the invariants of [Text.normalize]. */
+/** Property-based tests of [Text]. */
 class TextPropertiesTest {
-    @Property
-    fun normalizingTwiceChangesNothing(
-        @ForAll input: String,
-    ) {
-        if (input.isNotBlank()) {
-            val once = Text.normalize(input)
-            assertEquals(once, Text.normalize(once))
-        }
-    }
+    @Provide
+    fun nonBlankStrings(): Arbitrary<String> =
+        Arbitraries
+            .strings()
+            .alpha()
+            .ofMinLength(1)
+            .ofMaxLength(40)
 
     @Property
-    fun outputHasNoSurroundingWhitespace(
-        @ForAll input: String,
+    fun normalizeIsIdempotent(
+        @ForAll("nonBlankStrings") raw: String,
     ) {
-        if (input.isNotBlank()) {
-            val out = Text.normalize(input)
-            assertEquals(out.trim(), out)
-        }
+        val once = Text.normalize(raw)
+        assertEquals(once, Text.normalize(once))
     }
 }

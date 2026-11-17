@@ -9,4 +9,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Added offline-first notes core (`Note`, `Operation`, `LocalStore`, `InMemoryLocalStore`, `NotesRepository`, `RemoteApi`, `SyncEngine`, `SyncResult`, `NotesException`, `NetworkUnavailableException`) with per-field LWW merge and idempotent outbox sync.
 - Initial project structure from the factory utility template.

@@ -15,7 +15,8 @@ plugins {
 
 group = "io.github.trysac"
 version = "0.1.0"
-description = "Offline-first notes core for Kotlin with an outbox of idempotent operations, per-field last-writer-wins merge and duplicate-free sync against any backend port"
+description =
+    "Offline-first notes core for Kotlin with an outbox of idempotent operations, per-field last-writer-wins merge and duplicate-free sync against any backend port"
 
 // Build output; the gates image moves it out of the mounted repository (FABRICA_BUILD_DIR).
 providers.environmentVariable("FABRICA_BUILD_DIR").orNull?.takeIf { it.isNotEmpty() }?.let {

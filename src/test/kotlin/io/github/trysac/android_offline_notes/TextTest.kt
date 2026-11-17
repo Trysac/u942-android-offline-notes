@@ -6,7 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 
-/** Tests of the public API. */
+/** Tests of the [Text] helper API. */
 class TextTest {
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = ["'  Hello World '|hello world", "ABC|abc", "'\tx\n'|x"])
@@ -22,5 +22,6 @@ class TextTest {
     fun rejectsBlankInput(input: String) {
         val error = assertThrows<BlankInputException> { Text.normalize(input) }
         assertEquals("input is blank", error.message)
+        assertEquals("blank_input", error.code)
     }
 }

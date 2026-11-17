@@ -1,30 +1,23 @@
 # Architecture
 
-## Purpose
+## Overview
 
-`io.github.trysac:android-offline-notes` is a small, dependency-free Kotlin library: Offline-first notes core for Kotlin with an outbox of idempotent operations, per-field last-writer-wins merge and duplicate-free sync against any backend port
+`android-offline-notes` separates the synchronization and conflict-resolution model from Android framework concerns (Room, WorkManager, Compose, HTTP clients).
 
-## Shape
+## Core Components
 
-```text
-caller code --> package io.github.trysac.android_offline_notes (src/main/kotlin)
-                    |
-                    +-- objects and top-level functions that are pure; no I/O, no global mutable state
-                    +-- internal or private helpers (optional)
-```
+1. **`LocalStore` Port & `InMemoryLocalStore` Adapter**
+   Stores materialized `Note` records, per-field `(timestamp, deviceId)` `FieldVersion` metadata, an ordered outbox of unacknowledged `Operation` entries, and the latest `pullCursor`.
 
-- **Public API**: every public declaration of the package. `internal` and `private` declarations
-  may change without a major version.
-- **Errors**: invalid input throws an `IllegalArgumentException` subclass of the library (such as
-  `BlankInputException`) documented with `@throws`. The library never prints or exits.
-- **Side effects**: none. If a feature needs I/O, accept an `InputStream`, a `Reader` or a small
-  interface instead of opening resources, and record the choice in an ADR.
+2. **`NotesRepository`**
+   Validates input bounds (`title <= 200`, `body <= 100_000`, `outbox <= 10_000`), generates `Operation` records stamped with the injected `clock`, `ids`, and `deviceId`, applies them locally via `applyOperation`, and appends them to the outbox.
 
-## Quality contract
+3. **Per-Field LWW Merge with Permanent Tombstones**
+   - Each mutable property (`title`, `body`) tracks its highest `FieldVersion(timestamp, deviceId)`.
+   - An incoming operation updates a field if and only if its `(timestamp, deviceId)` is greater than or equal to the current version.
+   - `deleted` transitions monotonically from `false` to `true`. Once `deleted == true`, the note remains deleted even if a later edit for `title` or `body` arrives from another device.
 
-`scripts/Check.java` is the single definition of the gates; `fabrica.json` tells the factory and CI
-how to run it. See [TESTING.md](TESTING.md).
-
-## Decisions
-
-Architecture decisions are recorded in [decisions/](decisions/) as numbered ADRs.
+4. **`SyncEngine` & `RemoteApi` Port**
+   - **Push Phase**: Reads up to 100 operations from the outbox, sends them via `RemoteApi.push`, and removes only the `ackedOpIds` returned by the server. Lost responses leave operations in the outbox so retries resend the exact same `opId`s.
+   - **Pull Phase**: Repeatedly invokes `RemoteApi.pull(cursor, pageSize)` until exhausted, feeding each remote operation into `NotesRepository.applyOperation` and advancing the persisted pull cursor.
+   - **Offline Handling**: Catching `NetworkUnavailableException` immediately halts the cycle and returns `SyncResult(status = "offline", pushed, pulled)` without losing queued mutations.
