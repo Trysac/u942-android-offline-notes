@@ -1,48 +1,52 @@
 # android-offline-notes
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/Trysac/u942-android-offline-notes/actions/workflows/ci.yml/badge.svg)](https://github.com/Trysac/u942-android-offline-notes/actions/workflows/ci.yml)
+Offline-first notes core for Kotlin with an outbox of idempotent operations, per-field last-writer-wins merge and duplicate-free sync against any backend port.
 
-Offline-first notes core for Kotlin with an outbox of idempotent operations, per-field last-writer-wins merge and duplicate-free sync against any backend port
+## Overview
 
-## Problem
+Note-taking apps on phones must keep working without a network and later sync without duplicating notes on retried requests, losing concurrent edits across fields, or resurrecting deleted notes. `android-offline-notes` provides the platform-free domain core:
 
-Describe in two or three sentences the concrete problem this utility solves, who hits it, and what
-they do today without it. Replace this paragraph when the first real feature lands.
+- **`NotesRepository`**: Creates, edits, deletes, and queries notes against a `LocalStore` while recording idempotent per-field `Operation` items in a bounded outbox.
+- **Per-field Last-Writer-Wins (LWW) Merge**: Each field (`title`, `body`, `deleted`) is an independent LWW register ordered by `(timestamp, deviceId)`. Concurrent edits to `title` on one device and `body` on another both survive. Deletion (`deleted = true`) is a permanent tombstone.
+- **`SyncEngine`**: Pushes outbox operations in batches of 100, removes operations only after the server acknowledges their `opId`, and pulls paginated remote changes through the same merge function.
 
-## Install
+## Installation
 
-Maven coordinates `io.github.trysac:android-offline-notes`. Until it is published to Maven Central, build
-it from a release tag through JitPack (`https://jitpack.io`), then
-declare in `build.gradle.kts`:
+Add the library dependency to your `build.gradle.kts`:
 
 ```kotlin
-dependencies {
-    implementation("io.github.trysac:android-offline-notes:0.1.0")
-}
+implementation("io.github.trysac:android-offline-notes:1.0.0")
 ```
-
-Requires Java 21 or newer. No dependencies outside the Kotlin standard library.
 
 ## Usage
 
 ```kotlin
-import io.github.trysac.android_offline_notes.Text
+import io.github.trysac.android_offline_notes.InMemoryLocalStore
+import io.github.trysac.android_offline_notes.NotesRepository
 
-// normalize trims surrounding whitespace and lower-cases the text.
-val name = Text.normalize("  Hello World ") // "hello world"
-
-// Blank input is rejected explicitly instead of returning an empty string.
-Text.normalize("   ") // throws BlankInputException ("input is blank")
+val store = InMemoryLocalStore()
+var now = 1000L
+var seq = 0
+val repo = NotesRepository(store, clock = { now++ }, ids = { "id-${++seq}" }, deviceId = "dev-a")
+val note = repo.create(title = "Groceries", body = "milk")
+val updated = repo.edit(note.id, body = "milk, eggs")
+println("${updated.title}: ${updated.body} (outbox=${repo.outbox.size})")
 ```
 
-## Documentation
+## Public API
 
-- [Architecture](docs/ARCHITECTURE.md) and [decisions](docs/decisions/)
-- [Testing](docs/TESTING.md) and [security](docs/SECURITY.md)
-- [Project record](docs/PROJECT.md) and [stack](docs/STACK.md)
-- [Changelog](CHANGELOG.md) and [contributing guide](CONTRIBUTING.md)
+| Type | Description |
+|---|---|
+| `Note` | Immutable note snapshot (`id`, `title`, `body`, `updatedAt`, `deleted`). |
+| `Operation` | Idempotent field mutation (`opId`, `noteId`, `field`, `value`, `timestamp`, `deviceId`). |
+| `LocalStore` / `InMemoryLocalStore` | Storage port for notes, field versions, outbox, and pull cursor. |
+| `NotesRepository` | Local CRUD (`create`, `edit`, `delete`, `list`, `get`) and LWW merge. |
+| `RemoteApi` | Network port with `push(ops)` and `pull(cursor, limit)`. |
+| `SyncEngine` / `SyncResult` | Batched outbox push + paginated pull coordinator returning `ok` or `offline`. |
+| `NotesException` / `NetworkUnavailableException` | Typed domain exceptions with codes `too_long`, `outbox_full`, `not_found`, `invalid_page`. |
 
-## License
+## Why not just sync whole notes?
 
-[MIT](LICENSE) (c) 2026 Miguel Gomez
+Syncing whole notes with `updatedAt` timestamps creates conflicts when different fields (title vs body) change concurrently. This library's per-field merge preserves both edits, while `opId` tracking makes retries safe against network failures.
+
+See [docs/SECURITY.md](docs/SECURITY.md) for security details.
